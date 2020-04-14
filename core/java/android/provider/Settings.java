@@ -9556,6 +9556,12 @@ public final class Settings {
          */
         public static final String LOCKSCREEN_VISUALIZER_ENABLED = "lockscreen_visualizer";
 
+                /**
+         * Whether face unlock is allowed only on security view.
+         * @hide
+         */
+        public static final String FACE_UNLOCK_ALWAYS_REQUIRE_SWIPE = "face_unlock_always_require_swipe";
+
         /**
          * Whether to include options in power menu for rebooting into recovery or bootloader
          * @hide
