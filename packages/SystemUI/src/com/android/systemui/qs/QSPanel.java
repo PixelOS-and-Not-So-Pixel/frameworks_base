@@ -31,6 +31,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -55,6 +56,7 @@ import com.android.systemui.qs.QSHost.Callback;
 import com.android.systemui.qs.customize.QSCustomizer;
 import com.android.systemui.qs.external.CustomTile;
 import com.android.systemui.qs.logging.QSLogger;
+import com.android.systemui.settings.AutoBrightnessController;
 import com.android.systemui.settings.BrightnessController;
 import com.android.systemui.settings.ToggleSliderView;
 import com.android.systemui.statusbar.policy.BrightnessMirrorController;
@@ -95,6 +97,8 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
 
     @Nullable
     protected View mBrightnessView;
+    @Nullable
+    private AutoBrightnessController mAutoBrightnessController;
     @Nullable
     private BrightnessController mBrightnessController;
 
@@ -230,6 +234,9 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
         addView(mBrightnessView);
         mBrightnessController = new BrightnessController(getContext(),
                 findViewById(R.id.brightness_slider), mBroadcastDispatcher);
+        mAutoBrightnessController = new AutoBrightnessController(getContext(),
+                findViewById(R.id.auto_brightness_icon));
+        mAutoBrightnessController.updateStatus();
     }
 
     protected QSTileLayout createRegularTileLayout() {
@@ -747,19 +754,22 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
     }
 
     public void setBrightnessListening(boolean listening) {
-        if (mBrightnessController == null) {
+        if (mBrightnessController == null || mAutoBrightnessController == null) {
             return;
         }
         if (listening) {
             mBrightnessController.registerCallbacks();
+            mAutoBrightnessController.registerCallbacks();
         } else {
             mBrightnessController.unregisterCallbacks();
+            mAutoBrightnessController.unregisterCallbacks();
         }
     }
 
     public void refreshAllTiles() {
         if (mBrightnessController != null) {
             mBrightnessController.checkRestrictionAndSetEnabled();
+            mAutoBrightnessController.updateStatus();
         }
         for (TileRecord r : mRecords) {
             r.tile.refreshState();
