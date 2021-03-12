@@ -127,7 +127,6 @@ import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import com.android.internal.util.custom.faceunlock.FaceUnlockUtils;
 import com.android.internal.util.custom.fod.FodUtils;
 
 /**
@@ -294,11 +293,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
     private final Executor mBackgroundExecutor;
 
     private final boolean mFingerprintWakeAndUnlock;
-    private final boolean mFaceAuthOnlyOnSecurityView;
-    private boolean mBouncerFullyShown;
-
-    // Face unlock
-    private static final boolean mCustomFaceUnlockSupported = FaceUnlockUtils.isFaceUnlockSupported();
 
     /**
      * Short delay before restarting fingerprint authentication after a successful try. This should
@@ -1015,15 +1009,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
     private boolean isFaceDisabled(int userId) {
         final DevicePolicyManager dpm =
                 (DevicePolicyManager) mContext.getSystemService(Context.DEVICE_POLICY_SERVICE);
-        if (mCustomFaceUnlockSupported && dpm != null) {
-            try {
-                if (dpm.getPasswordQuality(null, userId) > 32768) {
-                    return true;
-                }
-            } catch (SecurityException e) {
-                Log.e("KeyguardUpdateMonitor", "isFaceDisabled error:", e);
-            }
-        }
         // TODO(b/140035044)
         return whitelistIpcs(() -> dpm != null && (dpm.getKeyguardDisabledFeatures(null, userId)
                 & DevicePolicyManager.KEYGUARD_DISABLE_FACE) != 0
@@ -1620,8 +1605,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
         mStrongAuthTracker = new StrongAuthTracker(context, this::notifyStrongAuthStateChanged);
         mFingerprintWakeAndUnlock = mContext.getResources().getBoolean(
                 com.android.systemui.R.bool.config_fingerprintWakeAndUnlock);
-        mFaceAuthOnlyOnSecurityView = mContext.getResources().getBoolean(
-                com.android.internal.R.bool.config_faceAuthOnlyOnSecurityView);
         mBackgroundExecutor = backgroundExecutor;
         mBroadcastDispatcher = broadcastDispatcher;
         mRingerModeTracker = ringerModeTracker;
@@ -2050,17 +2033,13 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
 
         // Only listen if this KeyguardUpdateMonitor belongs to the primary user. There is an
         // instance of KeyguardUpdateMonitor for each user but KeyguardUpdateMonitor is user-aware.
-        boolean shouldListen =
+        final boolean shouldListen =
                 (mBouncer || mAuthInterruptActive || awakeKeyguard
                         || shouldListenForFaceAssistant())
                 && !mSwitchingUser && !isFaceDisabled(user) && becauseCannotSkipBouncer
                 && !mKeyguardGoingAway && mFaceSettingEnabledForUser.get(user) && !mLockIconPressed
                 && strongAuthAllowsScanning && mIsPrimaryUser
                 && !mSecureCameraLaunched;
-
-        if (shouldListen && mFaceAuthOnlyOnSecurityView && !mBouncerFullyShown){
-            shouldListen = false;
-        }
 
         // Aggregate relevant fields for debug logging.
         if (DEBUG_FACE || DEBUG_SPEW) {
@@ -2085,15 +2064,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
         }
 
         return shouldListen;
-    }
-
-    public void onKeyguardBouncerFullyShown(boolean fullyShow) {
-        if (mBouncerFullyShown != fullyShow){
-            mBouncerFullyShown = fullyShow;
-            if (mFaceAuthOnlyOnSecurityView){
-                updateFaceListeningState();
-            }
-        }
     }
 
     private void maybeLogFaceListenerModelData(KeyguardFaceListenModel model) {
@@ -2556,7 +2526,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
         Assert.isMainThread();
         Log.d(TAG, "onKeyguardVisibilityChanged(" + showing + ")");
         mKeyguardIsVisible = showing;
-        mBouncerFullyShown = false;
 
         if (showing) {
             mSecureCameraLaunched = false;
@@ -2576,7 +2545,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
      */
     private void handleKeyguardReset() {
         if (DEBUG) Log.d(TAG, "handleKeyguardReset");
-        mBouncerFullyShown = false;
         updateBiometricListeningState();
         mNeedsSlowUnlockTransition = resolveNeedsSlowUnlockTransition();
     }
@@ -2634,7 +2602,6 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
      * Handle {@link #MSG_REPORT_EMERGENCY_CALL_ACTION}
      */
     private void handleReportEmergencyCallAction() {
-        mBouncerFullyShown = false;
         Assert.isMainThread();
         for (int i = 0; i < mCallbacks.size(); i++) {
             KeyguardUpdateMonitorCallback cb = mCallbacks.get(i).get();
